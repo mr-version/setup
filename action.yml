@@ -1,0 +1,33 @@
+name: 'Setup Mister.Version'
+description: 'Install and setup the Mister.Version CLI tool for semantic versioning in monorepos'
+author: 'Mister.Version Team'
+
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  version:
+    description: 'Version of Mister.Version to install (latest or specific version like 1.0.0)'
+    required: false
+    default: 'latest'
+  dotnet-version:
+    description: '.NET SDK version to use'
+    required: false
+    default: '8.0.x'
+  cache:
+    description: 'Enable caching of the tool installation'
+    required: false
+    default: 'true'
+
+outputs:
+  tool-path:
+    description: 'Path to the installed mr-version tool'
+  cache-hit:
+    description: 'Whether the tool was restored from cache'
+  version:
+    description: 'Actual version of the tool that was installed'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
