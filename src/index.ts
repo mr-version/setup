@@ -69,9 +69,30 @@ async function run(): Promise<void> {
     core.setOutput('cache-hit', cacheHit.toString())
     core.setOutput('version', actualVersion)
 
+    // Add collapsible summary to job output
+    await core.summary
+      .addHeading('🔧 Mister.Version Setup')
+      .addDetails('📦 Setup Details', 
+        `✅ **Tool installed successfully!**\n\n` +
+        `- **Version**: \`${actualVersion}\`\n` +
+        `- **Tool Path**: \`${toolPath}\`\n` +
+        `- **Cache Hit**: ${cacheHit ? '✅ Yes' : '❌ No'}\n` +
+        `- **Platform**: ${process.platform} (${process.arch})\n` +
+        `- **.NET Version**: ${dotnetVersion}\n\n` +
+        `The mr-version tool is now available in your workflow.`
+      )
+      .write()
+
     core.info(`✅ Mister.Version CLI tool setup complete! Version: ${actualVersion}`)
     
   } catch (error) {
+    await core.summary
+      .addHeading('❌ Mister.Version Setup Failed')
+      .addDetails('🐛 Error Details',
+        `\`\`\`\n${error instanceof Error ? error.message : String(error)}\n\`\`\``
+      )
+      .write()
+    
     core.setFailed(`Failed to setup Mister.Version: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
