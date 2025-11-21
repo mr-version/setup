@@ -12,7 +12,7 @@ inputs:
     required: false
     default: 'latest'
   dotnet-version:
-    description: '.NET SDK version to use'
+    description: '.NET SDK version to use (8.0.x, 9.0.x, or 10.0.x)'
     required: false
     default: '8.0.x'
   cache:
