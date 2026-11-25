@@ -8,15 +8,15 @@ branding:
 
 inputs:
   version:
-    description: 'Version of Mister.Version to install (latest or specific version like 1.0.0)'
+    description: 'Version of Mister.Version.CLI to install: latest (newest stable), prerelease (newest including prereleases), a specific version like 3.0.0, or a path to a local Mister.Version.CLI.<version>.nupkg'
     required: false
     default: 'latest'
   dotnet-version:
-    description: '.NET SDK version to use (8.0.x, 9.0.x, or 10.0.x)'
+    description: 'Deprecated and ignored: this action does not install .NET. Run actions/setup-dotnet before this action (see README for runtime requirements).'
     required: false
-    default: '8.0.x'
+    deprecationMessage: "The 'dotnet-version' input is ignored; this action does not install .NET. Use actions/setup-dotnet before mr-version/setup."
   cache:
-    description: 'Enable caching of the tool installation'
+    description: 'Cache the tool installation with the GitHub Actions cache service'
     required: false
     default: 'true'
 
@@ -29,5 +29,5 @@ outputs:
     description: 'Actual version of the tool that was installed'
 
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/index.js'

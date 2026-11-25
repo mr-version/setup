@@ -1,137 +1,140 @@
 # Setup Mister.Version Action
 
-Install and setup the Mister.Version CLI tool for semantic versioning in monorepos.
+Install the Mister.Version CLI (`mr-version`) for semantic versioning in monorepos.
 
 ## Description
 
-This action handles the installation and configuration of the Mister.Version CLI tool, ensuring it's available for subsequent versioning operations in your workflow. The tool is installed globally via `dotnet tool install`.
+This action installs the [`Mister.Version.CLI`](https://www.nuget.org/packages/Mister.Version.CLI) .NET tool with
+`dotnet tool install --tool-path` into the runner tool cache, adds it to `PATH`, and verifies that it starts.
+It does **not** install .NET: run [`actions/setup-dotnet`](https://github.com/actions/setup-dotnet) first.
 
 ## Usage
 
 ```yaml
-- uses: mr-version/setup@v1
-  with:
-    version: 'latest'
-    dotnet-version: '8.0.x'
+steps:
+  - uses: actions/checkout@v4
+    with:
+      fetch-depth: 0            # mr-version needs the full history and tags
+
+  - uses: actions/setup-dotnet@v4
+    with:
+      dotnet-version: '8.0.x'
+
+  - uses: mr-version/setup@main
+    with:
+      version: 'latest'
 ```
+
+### Which ref to use
+
+The repository has a `v1` tag, but it points at the initial check-in (June 2025) and predates the fixes described
+here (Node 24 runtime, working cache, DOTNET_ROOT handling). Until a new release tag is published, reference
+`@main` or pin a commit SHA.
 
 ## Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `version` | Version of Mister.Version to install (latest, specific version like 1.0.0, or local path) | No | `latest` |
-| `dotnet-version` | .NET SDK version to use | No | `8.0.x` |
-| `cache` | Enable caching of the tool installation | No | `true` |
-| `token` | GitHub token for downloading releases | No | `${{ github.token }}` |
+| `version` | `latest` (newest stable), `prerelease` (newest including prereleases), a specific version such as `3.0.0`, or a path to a local `Mister.Version.CLI.<version>.nupkg` | No | `latest` |
+| `cache` | Cache the installed tool with the GitHub Actions cache service | No | `true` |
+| `dotnet-version` | **Deprecated, ignored.** This action never installed .NET; use `actions/setup-dotnet` | No | |
 
 ## Outputs
 
 | Output | Description |
 |--------|-------------|
-| `tool-path` | Path to the installed mr-version tool |
-| `cache-hit` | Whether the tool was restored from cache |
-| `version` | Actual version of the tool that was installed |
+| `tool-path` | Directory containing the `mr-version` executable (added to `PATH`) |
+| `cache-hit` | `true` when the tool was restored from the cache (or was already present in the runner tool cache) |
+| `version` | Version of `Mister.Version.CLI` that was installed |
+
+## .NET requirements
+
+- A .NET SDK must be on `PATH` (`dotnet tool install` and `dotnet tool search` need it). Use `actions/setup-dotnet`.
+- The tool runs on the .NET 8 runtime. Builds of the CLI after 3.0.0 set `RollForward=Major`, so they also run when
+  only a newer runtime (.NET 9, .NET 10, ...) is installed. Version 3.0.0 and earlier need a .NET 8 runtime; to run
+  them on a newer runtime only, set `DOTNET_ROLL_FORWARD: Major` in the job environment.
+- The installed `mr-version` shim finds .NET through `DOTNET_ROOT` or the operating system's default install
+  location; it does not search `PATH`. `actions/setup-dotnet` sets `DOTNET_ROOT`. When it is not set (for example
+  .NET installed into `~/.dotnet` on a self-hosted runner), this action derives the install directory from the
+  `dotnet` on `PATH` and exports `DOTNET_ROOT` for the following steps.
 
 ## Examples
 
-### Basic Setup
+### Basic setup
 
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  
-  - uses: mr-version/setup@v1
-```
-
-### Specific Version
-
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  
-  - uses: mr-version/setup@v1
     with:
-      version: '1.1.0-rc.12'  # Specific version
+      fetch-depth: 0
+  - uses: actions/setup-dotnet@v4
+    with:
       dotnet-version: '8.0.x'
+  - uses: mr-version/setup@main
+  - run: mr-version report --output text
 ```
 
-### Local Development
+### Specific version
 
 ```yaml
-steps:
-  - uses: actions/checkout@v4
-  
-  - uses: mr-version/setup@v1
+  - uses: mr-version/setup@main
     with:
-      version: './mister.version/nupkg/Mister.Version.CLI.1.1.0-rc.15.nupkg'
-      cache: 'false'
+      version: '3.0.0'
 ```
 
-### Matrix Build
+### Newer .NET only
 
 ```yaml
-strategy:
-  matrix:
-    dotnet: ['6.0.x', '7.0.x', '8.0.x']
-    
-steps:
-  - uses: actions/checkout@v4
-  
-  - uses: mr-version/setup@v1
+  - uses: actions/setup-dotnet@v4
     with:
-      dotnet-version: ${{ matrix.dotnet }}
+      dotnet-version: '10.0.x'
+  - uses: mr-version/setup@main
+    with:
+      version: '3.0.0'
+    env:
+      DOTNET_ROLL_FORWARD: Major   # only needed for CLI versions without RollForward=Major (3.0.0 and earlier)
 ```
+
+### Local package (testing a CLI build)
+
+```yaml
+  - run: dotnet pack mister.version/Mister.Version.CLI -c Release -o ./nupkg -p:PackageVersion=3.0.1-local.1
+  - uses: mr-version/setup@main
+    with:
+      version: './nupkg/Mister.Version.CLI.3.0.1-local.1.nupkg'
+```
+
+The path is resolved against `GITHUB_WORKSPACE`. It may also point at a directory that contains exactly one
+`Mister.Version.CLI.*.nupkg`. Local packages are never cached. Give local builds a version that is not published on
+nuget.org: NuGet prefers its global packages folder over the local file when the version already exists there.
 
 ## Caching
 
-The action automatically caches the tool installation to speed up subsequent runs. The cache key is based on:
-- Operating system
-- .NET SDK version
-- Mister.Version tool version
+With `cache: true` the tool directory is saved with the GitHub Actions cache service (`@actions/cache` 5.x, which
+uses the current cache service) under the key `mister-version-nuget-<version>-<os>-<arch>`, and restored on later
+runs. When the cache service is unavailable (GHES without caching, local runs) caching is skipped with a message.
+A failed save is reported as a warning and never fails the step; "Tool cached for future use" is only logged when the
+save succeeded.
 
-To disable caching:
+On self-hosted runners the tool directory under `RUNNER_TOOL_CACHE` survives between jobs and is reused directly.
+
+To always install fresh:
 
 ```yaml
-- uses: mr-version/setup@v1
-  with:
-    cache: 'false'
+  - uses: mr-version/setup@main
+    with:
+      cache: 'false'
 ```
 
-## Version Resolution
+## Errors
 
-The `version` input accepts:
-- `latest` - Installs the latest stable release from NuGet
-- `1.1.0` - Installs a specific version
-- `1.1.0-rc.15` - Installs a prerelease version
-- `./path/to/nupkg` - Uses a local NuGet package path (useful for testing)
+The step fails (instead of installing a different version) when:
 
-## Prerequisites
-
-This action requires:
-- A GitHub-hosted or self-hosted runner
-- Network access to GitHub releases (unless using local path)
-
-## Troubleshooting
-
-### Tool Not Found
-
-If the tool isn't found after installation:
-1. Check the `tool-path` output
-2. Ensure the .NET SDK version is compatible
-3. Verify network access to GitHub
-
-### Cache Issues
-
-To force a fresh installation:
-```yaml
-- uses: mr-version/setup@v1
-  with:
-    cache: 'false'
-```
-
-### Permission Errors
-
-Ensure the runner has write permissions to the tool installation directory.
+- `dotnet` is not on `PATH`;
+- `latest`/`prerelease` cannot be resolved because `dotnet tool search` fails (set `version` to a specific version
+  to skip the lookup);
+- the requested version does not exist on the configured NuGet feeds;
+- `mr-version --help` does not run after installation (the error explains DOTNET_ROOT and runtime problems).
 
 ## License
 
